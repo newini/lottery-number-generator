@@ -1,3 +1,3 @@
 
-<img src="https://render.githubusercontent.com/render/math?math=A_n \var { Array of flag on the number at } n">
-<img src="https://render.githubusercontent.com/render/math?math=R_n=|\frac{ \var{ number of appearances of i } }{ N ( \var{ total times } ) }|_{i=1,...,L} \var { Ratio of each number }">
+<img src="https://render.githubusercontent.com/render/math?math=A_n \text{ Array of flag on the number at } n">
+<img src="https://render.githubusercontent.com/render/math?math=R_n=|\frac{ \text{ number of appearances of i } }{ N ( \text{ total times } ) }|_{i=1,...,L} \text { Ratio of each number }">
