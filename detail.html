@@ -1,0 +1,50 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<html>
+<head>
+  <title>Mathedemo</title>
+  <!-- Bootstrap -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet"
+      integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"
+      integrity="sha384-IQsoLXl5PILFhosVNubq5LC7Qb9DXgDA9i+tQ8Zj3iwWAwPtgFTxbJ8NT4GN1R8p" crossorigin="anonymous">
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.min.js"
+      integrity="sha384-Atwg2Pkwv9vp0ygtn1JAojH0nYbwNJLPhwyoVbhoPwBhjQPR5VtM2+xf0Uwh9KtT" crossorigin="anonymous">
+  </script>
+  <!-- math latex -->
+  <!-- example source: http://latex.userpage.fu-berlin.de/math.html -->
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Config({tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}});
+  </script>
+  <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML">
+  </script>
+</head>
+
+<body>
+  <h2></h2>
+  <ul class="list-group">
+    <li class="list-group-item">
+      $L (1 \leq L)$ is max number on a lottery game. ex. $L$ = 31
+    </li>
+    <li class="list-group-item">
+      $l (1 \leq l \leq L)$ is pick number on a lottery game. ex. $l$ = 5
+    </li>
+    <li class="list-group-item">
+      $n (1 \leq n)$ is current number of times. ex. $n$ = 1115
+    </li>
+    <li class="list-group-item">
+      $\mathbf{A}_n$ is array of flag on the number with the size of $L$. ex. $\mathbf{A}_1$ = [0, 1, 0, ..., 0, 1, 0]
+    </li>
+    <li class="list-group-item">
+      $\mathbf{B}_n = \Sigma_{i=1}^n \mathbf{A}_i$ is accumulatation. ex. $\mathbf{B}_3$ = [0, 1, 2, ..., 0, 3, 1]
+    </li>
+    <li class="list-group-item">
+      $\mathbf{R}_n = \frac{ \mathbf{B}_n }{ n \cdot l }$ is ratio of each number, so that $|\mathbf{R}_n|=1$. ex. $\mathbf{R}_3$ = [0, 1/15, 2/15, ..., 0, 3/15, 1/15]
+    </li>
+    <li class="list-group-item">
+      $\mathbf{P}_{n+1} = \frac{ 1 - \mathbf{R}_n }{ L - 1 }$ is probability of each number on next time. ex. $\mathbf{P}_4$ = [1/30, 14/450, 13/450, ..., 1/30, 12/450, 14/450]
+    </li>
+  </ul>
+
+</body>
+</html>
