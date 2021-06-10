@@ -15,7 +15,7 @@ __status__ = "Dev"
 
 # =================================================
 # modules
-import argparse, copy, csv, datetime, logging, random # default modules
+import argparse, configparser, copy, csv, datetime, logging, random # default modules
 import coloredlogs
 import numpy as np
 import torch, torchsummary
@@ -25,6 +25,9 @@ from sklearn.model_selection import train_test_split
 # =================================================
 # Parse arguments
 parser = argparse.ArgumentParser()
+
+parser.add_argument("-c", "--config_file", type=str, help="Specify config file")
+
 parser.add_argument('-d', '--debug', action='store_true', help='Debug mode')
 parser.add_argument('-l', '--log_file_name', type=str, default=datetime.date.today().strftime('%Y%m')+'.log',
         help='Log file name')
@@ -34,8 +37,7 @@ parser.add_argument('-L', '--Lottery_max_number', type=int, default=31,
 parser.add_argument('-p', '--pick', type=int, default=5,
         help='Number of pick in one game. Default: 5')
 
-parser.add_argument('-f', '--file_path', type=str,
-        help='CSV file path')
+parser.add_argument('-f', '--file_path', type=str, help='CSV file path')
 parser.add_argument('-r', '--remove_lines', type=int, default=0,
         help='Remove unnecessary header lines in csv file. Default: 0')
 parser.add_argument('-a', '--appearance_first_number_order', type=int, default=0,
@@ -49,6 +51,15 @@ parser.add_argument('--random_seed', type=int, default=7, help='Random seed. Def
 #parser.add_argument('-c', '--check', action='store_true')
 #parser.add_argument('-p', '--predict_drawing_n', type=int, default=5)
 args = parser.parse_args()
+
+# Read from config file and overwrite
+if args.config_file:
+    config = configparser.ConfigParser()
+    config.read(args.config_file)
+    defaults = {}
+    defaults.update(dict(config.items("Defaults")))
+    parser.set_defaults(**defaults)
+    args = parser.parse_args()
 
 
 # =================================================
@@ -113,7 +124,6 @@ with open(args.file_path) as csvfile:
 
 
 logging.info('Total number of times: %d' % len(A_n))
-logging.info('Total number of times: %d' % len(P_np1))
 
 # Check probability = 1 each games
 for index, P_kp1 in enumerate(P_np1):
