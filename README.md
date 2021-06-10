@@ -5,10 +5,11 @@
 
 ## How it works
 
+- Read number data from csv file
+
+- Calculate Probability on n+1
 
 Detail is [here](https://newini.github.io/lottery-number-generator/detail.html)
-
-test $a_n = x^2 + y_i$
 
 ##
 
