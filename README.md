@@ -9,7 +9,7 @@
 
 - Calculate Probability on n+1
 
-Detail is [here](https://newini.github.io/lottery-number-generator/detail.html)
+Detail is [here](https://newini.github.io/lottery-number-generator/docs/detail.html)
 
 ##
 
