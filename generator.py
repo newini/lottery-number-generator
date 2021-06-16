@@ -25,29 +25,37 @@ from sklearn.model_selection import train_test_split
 # =================================================
 # Parse arguments
 parser = argparse.ArgumentParser()
-
-parser.add_argument("-c", "--config_file", type=str, help="Specify config file")
-
-parser.add_argument('-d', '--debug', action='store_true', help='Debug mode')
+# Config
+parser.add_argument("-c", "--config_file", type=str, help='Config file for the lottery type (default: nil)')
+# Debug and log
+parser.add_argument('-d', '--debug', action='store_true', help='Debug mode (default: false)')
 parser.add_argument('-l', '--log_file_name', type=str, default=datetime.date.today().strftime('%Y%m')+'.log',
-        help='Log file name')
-
+        help='Log file name (default: %Y%m.log)')
+# Lottery game definition
 parser.add_argument('-L', '--Lottery_max_number', type=int, default=31,
-        help='Lottery game max numbers. Default: 31')
+        help='Lottery game max numbers. (default: 31)')
 parser.add_argument('-p', '--pick', type=int, default=5,
-        help='Number of pick in one game. Default: 5')
-
-parser.add_argument('-f', '--file_path', type=str, help='CSV file path')
+        help='Number of pick in one game (default: 5)')
+# Detail of input data
+parser.add_argument('-f', '--file_path', type=str, help='CSV file path (default: nil)')
 parser.add_argument('-r', '--remove_lines', type=int, default=0,
-        help='Remove unnecessary header lines in csv file. Default: 0')
+        help='Remove unnecessary header lines in csv file (default: 0)')
 parser.add_argument('-a', '--appearance_first_number_order', type=int, default=0,
-        help='Order of First number appears on the row in csv file. Default: 0')
-
+        help='Order of First number appears on the row in csv file (default: 0)')
+parser.add_argument('--perge_data_percentage', type=float, default=0.0,
+        help='Perge older data to improve accuracy. 0.0 < Input in percentage < 1.0 (default: 0.0)')
+# For formating data
+parser.add_argument('--test_size', type=float, default=0.1,
+        help='Test size is for validation. 0.0 < Input in percentage < 1.0 (default: 0.1)')
+parser.add_argument('--random_state', type=int, default=0,
+        help='Random state is used when split data for validation (default: 0)')
+parser.add_argument('--batch_size', type=int, default=1,
+        help='How many samples per batch to load (default: 1)')
+# Others
 parser.add_argument('--random_seed', type=int, default=7, help='Random seed. Default: 7')
 
 #parser.add_argument('-e', '--epochs', type=int, default=50)
 #parser.add_argument('-t', '--times', type=int, default=5)
-#parser.add_argument('-b', '--batch_size', type=int, default=128)
 #parser.add_argument('-c', '--check', action='store_true')
 #parser.add_argument('-p', '--predict_drawing_n', type=int, default=5)
 args = parser.parse_args()
@@ -59,7 +67,7 @@ if args.config_file:
     defaults = {}
     defaults.update(dict(config.items("Defaults")))
     parser.set_defaults(**defaults)
-    args = parser.parse_args()
+    args = parser.parse_args() # Overwrite arguments
 
 
 # =================================================
@@ -122,8 +130,9 @@ with open(args.file_path) as csvfile:
         R_k = C_k/( args.pick*(index+1) )
         P_np1.append( (1 - R_k)/(args.Lottery_max_number-1) )
 
+N = len(A_n)
 
-logging.info('Total number of times: %d' % len(A_n))
+logging.info('Total number of times: %d' % N)
 
 # Check probability = 1 each games
 for index, P_kp1 in enumerate(P_np1):
@@ -131,6 +140,48 @@ for index, P_kp1 in enumerate(P_np1):
         logging.warning('k=%d, Probability is not 1' % index)
 
 
+# =================================================
+# Format data
+X_array = []
+y_array = []
 
+# Simplest model
+# L channel input --> L channel output
+for index in range( int(N*args.perge_data_percentage), N-1 -1 ): # Do not use last data for training
+    X_array.append( B_n[index] )
+    y_array.append( B_n[index+1] )
+
+logging.info( 'Lengh of X is %d' % ( len(X_array) ) )
+
+if args.debug:
+    for i in range(6):
+        print(X_array[i])
+        print(y_array[i])
+
+# List --> numpy.array
+X_array = np.array(X_array)
+y_array = np.array(y_array)
+
+# Split for valid
+X_train, X_valid, y_train, y_valid = train_test_split(
+        X_array, y_array, test_size=args.test_size, random_state=args.random_state)
+
+# numpy.array --> torch.tensor
+X_train_tensor = torch.tensor(X_train, dtype=torch.float)
+X_valid_tensor = torch.tensor(X_valid, dtype=torch.float)
+y_train_tensor = torch.tensor(y_train, dtype=torch.long)
+y_valid_tensor = torch.tensor(y_valid, dtype=torch.long)
+logging.info('X_train size is: %s' % str( X_train_tensor.shape ) )
+logging.info('y_train size is: %s' % str( y_train_tensor.shape ) )
+logging.info('X_valid size is: %s' % str( X_valid_tensor.shape ) )
+logging.info('y_valid size is: %s' % str( y_valid_tensor.shape ) )
+
+# Create dataset
+train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
+valid_dataset = torch.utils.data.TensorDataset(X_valid_tensor, y_valid_tensor)
+
+# Create data loader
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size)
+valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=args.batch_size)
 
 
