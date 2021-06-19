@@ -14,7 +14,7 @@ __status__ = "Dev"
 
 
 # =================================================
-# modules
+# Import modules
 import argparse, configparser, copy, csv, datetime, logging, random # default modules
 import coloredlogs
 import numpy as np
@@ -54,13 +54,9 @@ parser.add_argument('--batch_size', type=int, default=1,
 # For training
 parser.add_argument('-e', '--epochs', type=int, default=50,
         help='How many times to train (default: 50)')
-
 # Others
 parser.add_argument('--random_seed', type=int, default=7, help='Random seed. Default: 7')
 
-#parser.add_argument('-t', '--times', type=int, default=5)
-#parser.add_argument('-c', '--check', action='store_true')
-#parser.add_argument('-p', '--predict_drawing_n', type=int, default=5)
 args = parser.parse_args()
 
 # Read from config file and overwrite
@@ -75,112 +71,101 @@ if args.config_file:
 
 # =================================================
 # Logging
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s %(levelname)-8s %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    filename="log/%s" % (args.log_file_name),
-    filemode="a",
-)
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-formatter = logging.Formatter("%(levelname)-8s %(message)s")
-console.setFormatter(formatter)
-logging.getLogger("").addHandler(console)
+def setupLogging():
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s %(levelname)-8s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        filename="log/%s" % (args.log_file_name),
+        filemode="a",
+    )
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(levelname)-8s %(message)s")
+    console.setFormatter(formatter)
+    logging.getLogger("").addHandler(console)
 
-# color logging
-coloredlogs.install()
+    # color logging
+    coloredlogs.install()
 
-logging.info('Logging setup finished')
-
-
-# =================================================
-# Setup
-logging.info('Debug mode: ' + str(args.debug))
-# Fix random seed
-random.seed(args.random_seed)
+    logging.info('Logging setup finished')
 
 
 # =================================================
 # Read lottery number csv
-if not args.file_path:
-    logging.error('No csv file path given!')
-    exit(1)
+def readCSV():
+    if not args.file_path:
+        logging.error('No csv file path given!')
+        exit(1)
 
-A_n = [] # pick_in_decimal_w_times = []
-B_n = [] # pick_in_binary_w_times = []
-C_n = [] # pick_in_binary_accumulated_w_times = []
-P_np1 = []
-with open(args.file_path) as csvfile:
-    # Remove unnecessary lines
-    for i in range(args.remove_lines):
-        next(csvfile)
+    A_n = [] # pick in decimal w times
+    B_n = [] # pick in binary w times
+    C_n = [] # pick in binary accumulated w times
+    P_np1 = []
+    with open(args.file_path) as csvfile:
+        # Remove unnecessary lines
+        for i in range(args.remove_lines):
+            next(csvfile)
 
-    C_k = np.array([0.0 for i in range(args.Lottery_max_number)])
+        C_k = np.array( [0.0 for i in range(args.Lottery_max_number)] )
 
-    csvreader = csv.reader(csvfile, delimiter=',')
-    for index, row in enumerate(csvreader):
-        A_k = []
-        B_k = [ 0.0 for i in range(args.Lottery_max_number) ]
-        for num in row[args.appearance_first_number_order:args.appearance_first_number_order+args.pick]:
-            A_k.append(int(num)-1) ### Becareful
-            B_k[int(num)-1] = 1
-        C_k += np.array(B_k)
+        csvreader = csv.reader(csvfile, delimiter=',')
+        for index, row in enumerate(csvreader):
+            A_k = []
+            B_k = [ 0.0 for i in range(args.Lottery_max_number) ]
+            for num in row[args.appearance_first_number_order:args.appearance_first_number_order+args.pick]:
+                A_k.append(int(num)-1) ### Becareful
+                B_k[int(num)-1] = 1
+            C_k += np.array(B_k)
 
-        A_n.append(A_k)
-        B_n.append(B_k)
-        C_n.append(copy.copy(C_k)) # np.array
-        R_k = C_k/( args.pick*(index+1) )
-        P_np1.append( (1 - R_k)/(args.Lottery_max_number-1) )
+            A_n.append(A_k)
+            B_n.append(B_k)
+            C_n.append(copy.copy(C_k)) # np.array
+            R_k = C_k/( args.pick*(index+1) )
+            P_np1.append( (1 - R_k)/(args.Lottery_max_number-1) )
 
-N = len(A_n)
+    N = len(A_n)
 
-logging.info('Total number of times: %d' % N)
+    logging.info('N = %d' % N)
 
-# Check probability = 1 each games
-for index, P_kp1 in enumerate(P_np1):
-    if round( np.sum(P_kp1), 9 ) != 1:
-        logging.warning('k=%d, Probability is not 1' % index)
+    # Check probability = 1 each games
+    for index, P_kp1 in enumerate(P_np1):
+        if round( np.sum(P_kp1), 9 ) != 1:
+            logging.warning('k=%d, Probability is not 1' % index)
+
+    return A_n, B_n, C_n, P_np1, N
 
 
 # =================================================
 # Format data
-X_array = []
-y_array = []
+def formatData(X_array, y_array):
+    # List --> numpy.array
+    X_array = np.array(X_array)
+    y_array = np.array(y_array)
 
-# Simplest model
-# L channel input --> L channel output
-for index in range( int(N*args.perge_data_percentage), N-1 -1 ): # Do not use last data for training
-    X_array.append( B_n[index] )
-    y_array.append( A_n[index+1] )
+    # Split for valid
+    X_train, X_valid, y_train, y_valid = train_test_split(
+            X_array, y_array, test_size=args.test_size, random_state=args.random_state)
 
-logging.info( 'Lengh of X is %d' % ( len(X_array) ) )
+    # numpy.array --> torch.tensor
+    X_train_tensor = torch.tensor(X_train, dtype=torch.float)
+    X_valid_tensor = torch.tensor(X_valid, dtype=torch.float)
+    y_train_tensor = torch.tensor(y_train, dtype=torch.long)
+    y_valid_tensor = torch.tensor(y_valid, dtype=torch.long)
+    logging.info('X_train size is: %s' % str( X_train_tensor.shape ) )
+    logging.info('y_train size is: %s' % str( y_train_tensor.shape ) )
+    logging.info('X_valid size is: %s' % str( X_valid_tensor.shape ) )
+    logging.info('y_valid size is: %s' % str( y_valid_tensor.shape ) )
 
-# List --> numpy.array
-X_array = np.array(X_array)
-y_array = np.array(y_array)
+    # Create dataset
+    train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
+    valid_dataset = torch.utils.data.TensorDataset(X_valid_tensor, y_valid_tensor)
 
-# Split for valid
-X_train, X_valid, y_train, y_valid = train_test_split(
-        X_array, y_array, test_size=args.test_size, random_state=args.random_state)
+    # Create data loader
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size)
+    valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=args.batch_size)
 
-# numpy.array --> torch.tensor
-X_train_tensor = torch.tensor(X_train, dtype=torch.float)
-X_valid_tensor = torch.tensor(X_valid, dtype=torch.float)
-y_train_tensor = torch.tensor(y_train, dtype=torch.long)
-y_valid_tensor = torch.tensor(y_valid, dtype=torch.long)
-logging.info('X_train size is: %s' % str( X_train_tensor.shape ) )
-logging.info('y_train size is: %s' % str( y_train_tensor.shape ) )
-logging.info('X_valid size is: %s' % str( X_valid_tensor.shape ) )
-logging.info('y_valid size is: %s' % str( y_valid_tensor.shape ) )
-
-# Create dataset
-train_dataset = torch.utils.data.TensorDataset(X_train_tensor, y_train_tensor)
-valid_dataset = torch.utils.data.TensorDataset(X_valid_tensor, y_valid_tensor)
-
-# Create data loader
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size)
-valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=args.batch_size)
+    return train_loader, valid_loader
 
 
 # =================================================
@@ -247,16 +232,29 @@ def trainModel(model, loss_function, optimizer, data_loader, is_validation=False
 
 
 # =================================================
+# Initialize
+def initialize():
+    setupLogging()
+
+    logging.info('Debug mode: ' + str(args.debug))
+
+    # Fix random seed
+    random.seed(args.random_seed)
+
+    torch.manual_seed(0)
+
+
+# =================================================
 # Execute
-def execute(model, loss_function, optimizer, train_loader, valid_loader, epoch):
+def execute(model, loss_function, optimizer, train_loader, valid_loader):
     max_epoch = 0
     max_model = model
     max_accuracy = 0.0
-    for i in range(epoch):
+    for i in range(args.epochs):
         train_loss, train_accuracy = trainModel(model, loss_function, optimizer, train_loader)
         valid_loss, valid_accuracy = trainModel(model, loss_function, optimizer, valid_loader, is_validation=True)
 
-        logging.info('Epoch: {:04d}, Train loss: {:.4f}, acc.: {:.4f}, Valid loss: {:.4f}, acc.: {:.4f}'.format(i, train_loss, train_accuracy, valid_loss, valid_accuracy))
+        logging.info('e={:04d}, Train loss={:.4f}, acc={:.4f}. Valid loss={:.4f}, acc.={:.4f}'.format(i, train_loss, train_accuracy, valid_loss, valid_accuracy))
 
         if i > 10 and valid_accuracy > max_accuracy:
             logging.info('Found max accuracy model. valid_accuracy: %f' % valid_accuracy)
@@ -270,25 +268,15 @@ def execute(model, loss_function, optimizer, train_loader, valid_loader, epoch):
     return model, max_model
 
 
-# Set model
-torch.manual_seed(0)
-model = torch.nn.Sequential(
-        torch.nn.Linear(args.Lottery_max_number, args.Lottery_max_number*2),
-        torch.nn.Linear(args.Lottery_max_number*2, args.Lottery_max_number),
-        #torch.nn.ReLU(),
-        #torch.nn.Dropout(p=0.5),
-        )
-logging.info('Model is: %s' % str( torchsummary.summary(model, (args.Lottery_max_number,)) ) )
+# =================================================
+def finalize():
+    pass
 
-loss_function = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-
-trained_model, max_trained_model = execute(model, loss_function, optimizer, train_loader, valid_loader, args.epochs)
 
 
 # =================================================
 # Test
-def testModel(model):
+def testModel(model, A_n, B_n, N):
     logging.info('[Test]')
     model.eval()
     for n in range(N-1 -5, N-1):
@@ -304,7 +292,46 @@ def testModel(model):
         logging.info('n=%d, A`_{n+1}=%s. A_{n+1}=%s'
                 % (n+1, str(predicted_numbers.tolist()), str(answer_numbers.tolist()) ) )
 
-logging.info('Trained model:')
-testModel(trained_model)
-logging.info('Max Trained model:')
-testModel(max_trained_model)
+
+# =================================================
+# Simplest model
+# L channel input --> L channel output
+def simplestModelExec():
+    initialize()
+
+    A_n, B_n, C_n, P_np1, N = readCSV()
+
+    # Simplest model data X, y
+    X_array = []
+    y_array = []
+
+    for index in range( int(N*args.perge_data_percentage), N-1 -1 ): # Do not use last data for training
+        X_array.append( B_n[index] )
+        y_array.append( A_n[index+1] )
+
+    logging.info( 'Lengh of X is %d' % ( len(X_array) ) )
+
+    train_loader, valid_loader = formatData(X_array, y_array)
+
+    model = torch.nn.Sequential(
+            torch.nn.Linear(args.Lottery_max_number, args.Lottery_max_number),
+            #torch.nn.ReLU(),
+            #torch.nn.Dropout(p=0.5),
+            )
+    logging.info('Model is: %s' % str( torchsummary.summary(model, (args.Lottery_max_number,)) ) )
+
+    loss_function = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+
+    trained_model, max_trained_model = execute(model, loss_function, optimizer, train_loader, valid_loader)
+
+    logging.info('Test w/ trained model')
+    testModel(trained_model, A_n, B_n, N)
+    logging.info('Test w/ Max valid accuracy model')
+    testModel(max_trained_model, A_n, B_n, N)
+
+
+# =================================================
+# Main
+if __name__ == "__main__":
+    simplestModelExec()
