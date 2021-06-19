@@ -51,10 +51,13 @@ parser.add_argument('--random_state', type=int, default=0,
         help='Random state is used when split data for validation (default: 0)')
 parser.add_argument('--batch_size', type=int, default=1,
         help='How many samples per batch to load (default: 1)')
+# For training
+parser.add_argument('-e', '--epochs', type=int, default=50,
+        help='How many times to train (default: 50)')
+
 # Others
 parser.add_argument('--random_seed', type=int, default=7, help='Random seed. Default: 7')
 
-#parser.add_argument('-e', '--epochs', type=int, default=50)
 #parser.add_argument('-t', '--times', type=int, default=5)
 #parser.add_argument('-c', '--check', action='store_true')
 #parser.add_argument('-p', '--predict_drawing_n', type=int, default=5)
@@ -149,14 +152,9 @@ y_array = []
 # L channel input --> L channel output
 for index in range( int(N*args.perge_data_percentage), N-1 -1 ): # Do not use last data for training
     X_array.append( B_n[index] )
-    y_array.append( B_n[index+1] )
+    y_array.append( A_n[index+1] )
 
 logging.info( 'Lengh of X is %d' % ( len(X_array) ) )
-
-if args.debug:
-    for i in range(6):
-        print(X_array[i])
-        print(y_array[i])
 
 # List --> numpy.array
 X_array = np.array(X_array)
@@ -185,3 +183,128 @@ train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_
 valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=args.batch_size)
 
 
+# =================================================
+# Train model function
+def trainModel(model, loss_function, optimizer, data_loader, is_validation=False):
+    if is_validation:
+        model.eval()
+
+    loss_error = 0
+    correct_count = 0
+    count = len(data_loader.dataset)
+    if args.debug:
+        print(count)
+
+    for X, y in data_loader:
+        # Get predicted result
+        predicted_numbers_binary = model(X)
+
+        # Get top pick numbers
+        _, predicted_numbers = torch.topk(predicted_numbers_binary.data, args.pick)
+
+        if args.debug:
+            print(X.shape)
+            print(y.shape)
+            print(predicted_numbers_binary.shape)
+            print(predicted_numbers.shape)
+
+        # Check if predicted contains its next numbers, and count
+        corrects = torch.eq(predicted_numbers, y)
+        #for i in range(args.predict_drawing_n):
+        #    if i == 0:
+        #        corrects = torch.eq(all_number_in6_tensor[y+1], predicted_numbers[:,i].reshape(-1, 1))
+        #    else:
+        #        corrects += torch.eq(all_number_in6_tensor[y+1], predicted_numbers[:,i].reshape(-1, 1))
+        correct_count += corrects.sum().item()/args.pick
+
+        if args.debug:
+            print(correct_count)
+
+        # Set one target
+        # Loss function only accept 1D target
+        #targets = torch.tensor( [random.choices([i for i in range(total_numbers)], weights=(1-all_number_probability_in45[yy+1]), k=1) for yy in y] ).reshape(-1)
+        targets = torch.tensor( [random.choice(y_n) for y_n in y] ).reshape(-1)
+
+        # Calculate loss error
+        loss = loss_function(predicted_numbers_binary, targets)
+        loss_error += loss.item()*len(y)
+
+        # Update weight
+        if not is_validation:
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        if args.debug:
+            break
+
+    mean_loss_error = loss_error / count
+    accuracy = correct_count / count
+
+    if is_validation:
+        model.train()
+    return mean_loss_error, accuracy
+
+
+# =================================================
+# Execute
+def execute(model, loss_function, optimizer, train_loader, valid_loader, epoch):
+    max_epoch = 0
+    max_model = model
+    max_accuracy = 0.0
+    for i in range(epoch):
+        train_loss, train_accuracy = trainModel(model, loss_function, optimizer, train_loader)
+        valid_loss, valid_accuracy = trainModel(model, loss_function, optimizer, valid_loader, is_validation=True)
+
+        logging.info('Epoch: {:04d}, Train loss: {:.4f}, acc.: {:.4f}, Valid loss: {:.4f}, acc.: {:.4f}'.format(i, train_loss, train_accuracy, valid_loss, valid_accuracy))
+
+        if i > 10 and valid_accuracy > max_accuracy:
+            logging.info('Found max accuracy model. valid_accuracy: %f' % valid_accuracy)
+            max_accuracy = valid_accuracy
+            max_model = copy.deepcopy(model)
+            max_epoch = i
+        if args.debug:
+            break
+
+    logging.info('In epoch %d, max_accuracy is %f' % (max_epoch, max_accuracy))
+    return model, max_model
+
+
+# Set model
+torch.manual_seed(0)
+model = torch.nn.Sequential(
+        torch.nn.Linear(args.Lottery_max_number, args.Lottery_max_number*2),
+        torch.nn.Linear(args.Lottery_max_number*2, args.Lottery_max_number),
+        #torch.nn.ReLU(),
+        #torch.nn.Dropout(p=0.5),
+        )
+logging.info('Model is: %s' % str( torchsummary.summary(model, (args.Lottery_max_number,)) ) )
+
+loss_function = torch.nn.CrossEntropyLoss()
+optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+
+trained_model, max_trained_model = execute(model, loss_function, optimizer, train_loader, valid_loader, args.epochs)
+
+
+# =================================================
+# Test
+def testModel(model):
+    logging.info('[Test]')
+    model.eval()
+    for n in range(N-1 -5, N-1):
+        X = B_n[n]
+
+        predicted_numbers_binary = model( torch.tensor(X, dtype=torch.float) )
+        _, predicted_numbers = torch.topk(predicted_numbers_binary.data, args.pick)
+
+        # Go back to original decimal
+        #predicted_numbers = predicted_numbers.sort()[0] + 1
+        predicted_numbers = predicted_numbers + 1
+        answer_numbers = np.array(A_n[n+1]) + 1
+        logging.info('n=%d, A`_{n+1}=%s. A_{n+1}=%s'
+                % (n+1, str(predicted_numbers.tolist()), str(answer_numbers.tolist()) ) )
+
+logging.info('Trained model:')
+testModel(trained_model)
+logging.info('Max Trained model:')
+testModel(max_trained_model)
