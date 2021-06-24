@@ -93,15 +93,15 @@ def setupLogging():
 
 # =================================================
 # Read lottery number csv
+A_n = [] # pick in decimal w times
+B_n = [] # pick in binary w times
+C_n = [] # pick in binary accumulated w times
+P_np1 = []
 def readCSV():
     if not args.file_path:
         logging.error('No csv file path given!')
         exit(1)
 
-    A_n = [] # pick in decimal w times
-    B_n = [] # pick in binary w times
-    C_n = [] # pick in binary accumulated w times
-    P_np1 = []
     with open(args.file_path) as csvfile:
         # Remove unnecessary lines
         for i in range(args.remove_lines):
@@ -114,8 +114,8 @@ def readCSV():
             A_k = []
             B_k = [ 0.0 for i in range(args.Lottery_max_number) ]
             for num in row[args.appearance_first_number_order:args.appearance_first_number_order+args.pick]:
-                A_k.append(int(num)-1) ### Becareful
-                B_k[int(num)-1] = 1
+                A_k.append(int(num)-1)      # Becareful!
+                B_k[int(num)-1] = 1         # minus 1 to adapt to array index
             C_k += np.array(B_k)
 
             A_n.append(A_k)
@@ -124,6 +124,7 @@ def readCSV():
             R_k = C_k/( args.pick*(index+1) )
             P_np1.append( (1 - R_k)/(args.Lottery_max_number-1) )
 
+    global N
     N = len(A_n)
 
     logging.info('N = %d' % N)
@@ -132,8 +133,6 @@ def readCSV():
     for index, P_kp1 in enumerate(P_np1):
         if round( np.sum(P_kp1), 9 ) != 1:
             logging.warning('k=%d, Probability is not 1' % index)
-
-    return A_n, B_n, C_n, P_np1, N
 
 
 # =================================================
@@ -150,8 +149,8 @@ def formatData(X_array, y_array):
     # numpy.array --> torch.tensor
     X_train_tensor = torch.tensor(X_train, dtype=torch.float)
     X_valid_tensor = torch.tensor(X_valid, dtype=torch.float)
-    y_train_tensor = torch.tensor(y_train, dtype=torch.long)
-    y_valid_tensor = torch.tensor(y_valid, dtype=torch.long)
+    y_train_tensor = torch.tensor(y_train, dtype=torch.float)
+    y_valid_tensor = torch.tensor(y_valid, dtype=torch.float)
     logging.info('X_train size is: %s' % str( X_train_tensor.shape ) )
     logging.info('y_train size is: %s' % str( y_train_tensor.shape ) )
     logging.info('X_valid size is: %s' % str( X_valid_tensor.shape ) )
@@ -170,7 +169,7 @@ def formatData(X_array, y_array):
 
 # =================================================
 # Train model function
-def trainModel(model, loss_function, optimizer, data_loader, is_validation=False):
+def trainModel(model, loss_function, optimizer, data_loader, is_validation=False, k=1):
     if is_validation:
         model.eval()
 
@@ -185,33 +184,23 @@ def trainModel(model, loss_function, optimizer, data_loader, is_validation=False
         predicted_numbers_binary = model(X)
 
         # Get top pick numbers
-        _, predicted_numbers = torch.topk(predicted_numbers_binary.data, args.pick)
+        _, predicted_numbers = torch.topk(predicted_numbers_binary.data, k)
+
+        _, y_topk = torch.topk(y, k)
+
+        # Check if predicted contains its next numbers, and count
+        corrects = torch.eq( predicted_numbers.sort()[0], y_topk.sort()[0] )
+        correct_count += corrects.sum().item()/args.pick
 
         if args.debug:
             print(X.shape)
             print(y.shape)
             print(predicted_numbers_binary.shape)
             print(predicted_numbers.shape)
-
-        # Check if predicted contains its next numbers, and count
-        corrects = torch.eq(predicted_numbers, y)
-        #for i in range(args.predict_drawing_n):
-        #    if i == 0:
-        #        corrects = torch.eq(all_number_in6_tensor[y+1], predicted_numbers[:,i].reshape(-1, 1))
-        #    else:
-        #        corrects += torch.eq(all_number_in6_tensor[y+1], predicted_numbers[:,i].reshape(-1, 1))
-        correct_count += corrects.sum().item()/args.pick
-
-        if args.debug:
             print(correct_count)
 
-        # Set one target
-        # Loss function only accept 1D target
-        #targets = torch.tensor( [random.choices([i for i in range(total_numbers)], weights=(1-all_number_probability_in45[yy+1]), k=1) for yy in y] ).reshape(-1)
-        targets = torch.tensor( [random.choice(y_n) for y_n in y] ).reshape(-1)
-
         # Calculate loss error
-        loss = loss_function(predicted_numbers_binary, targets)
+        loss = loss_function(predicted_numbers_binary, y)
         loss_error += loss.item()*len(y)
 
         # Update weight
@@ -246,13 +235,13 @@ def initialize():
 
 # =================================================
 # Execute
-def execute(model, loss_function, optimizer, train_loader, valid_loader):
+def execute(model, loss_function, optimizer, train_loader, valid_loader, k=1):
     max_epoch = 0
     max_model = model
     max_accuracy = 0.0
     for i in range(args.epochs):
-        train_loss, train_accuracy = trainModel(model, loss_function, optimizer, train_loader)
-        valid_loss, valid_accuracy = trainModel(model, loss_function, optimizer, valid_loader, is_validation=True)
+        train_loss, train_accuracy = trainModel(model, loss_function, optimizer, train_loader, k=k)
+        valid_loss, valid_accuracy = trainModel(model, loss_function, optimizer, valid_loader, is_validation=True, k=k)
 
         logging.info('e={:04d}, Train loss={:.4f}, acc={:.4f}. Valid loss={:.4f}, acc.={:.4f}'.format(i, train_loss, train_accuracy, valid_loss, valid_accuracy))
 
@@ -276,38 +265,68 @@ def finalize():
 
 # =================================================
 # Test
-def testModel(model, A_n, B_n, N):
-    logging.info('[Test]')
+def testModel(model, X, k=1):
     model.eval()
-    for n in range(N-1 -5, N-1):
-        X = B_n[n]
+    predicted_numbers_binary = model( torch.tensor(X, dtype=torch.float) )
+    _, predicted_numbers = torch.topk(predicted_numbers_binary.data, k)
 
-        predicted_numbers_binary = model( torch.tensor(X, dtype=torch.float) )
-        _, predicted_numbers = torch.topk(predicted_numbers_binary.data, args.pick)
-
-        # Go back to original decimal
-        #predicted_numbers = predicted_numbers.sort()[0] + 1
-        predicted_numbers = predicted_numbers + 1
-        answer_numbers = np.array(A_n[n+1]) + 1
-        logging.info('n=%d, A`_{n+1}=%s. A_{n+1}=%s'
-                % (n+1, str(predicted_numbers.tolist()), str(answer_numbers.tolist()) ) )
+    # Go back to original decimal
+    predicted_numbers = predicted_numbers + 1
+    return predicted_numbers
 
 
 # =================================================
 # Simplest model
-# L channel input --> L channel output
+# model: L channel input --> L channel output --> get top 5 numbers
+# max train acc=0.13, max valid acc=0.05
 def simplestModelExec():
-    initialize()
+    X_array = []
+    y_array = []
 
-    A_n, B_n, C_n, P_np1, N = readCSV()
+    print(N)
+    for index in range( int(N*args.perge_data_percentage), N-1 -1 ): # Do not use last data for training
+        X_array.append( B_n[index] + P_np1[index].tolist() )
+        y_array.append( B_n[index+1] )
+    logging.info( 'Lengh of X is %d' % ( len(X_array) ) )
 
-    # Simplest model data X, y
+    train_loader, valid_loader = formatData(X_array, y_array)
+
+    model = torch.nn.Sequential(
+            torch.nn.Linear(args.Lottery_max_number*2, args.Lottery_max_number),
+            #torch.nn.ReLU(),
+            #torch.nn.Dropout(p=0.5),
+            )
+    logging.info('Model is: %s' % str( torchsummary.summary(model, (args.Lottery_max_number*2,)) ) )
+
+    loss_function = torch.nn.BCEWithLogitsLoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+
+    trained_model, max_trained_model = execute(model, loss_function, optimizer, train_loader, valid_loader, k=args.pick)
+
+    logging.info('Test w/ trained model')
+
+    for n in range(N-6, N):
+        X = B_n[n] + P_np1[n].tolist()
+        predicted_numbers = testModel(trained_model, X, k=args.pick)
+        if n < N-1:
+            answer_numbers = np.array(A_n[n+1]) + 1
+        else:
+            answer_numbers = np.array([])
+        logging.info('n=%d, A`_{n+1}=%s. A_{n+1}=%s'
+                % (n+1, str(predicted_numbers.tolist()), str(answer_numbers.tolist()) ) )
+
+    #logging.info('Test w/ Max valid accuracy model')
+
+# Each pick model
+# X = [ A_n[0:5] ], y = A_{n+1}[0][ picks (n) ], [ picks (n+1) ]
+def eachPickModelExec():
     X_array = []
     y_array = []
 
     for index in range( int(N*args.perge_data_percentage), N-1 -1 ): # Do not use last data for training
-        X_array.append( B_n[index] )
-        y_array.append( A_n[index+1] )
+        for i in range(args.pick):
+            X_array.append( B_n[index] )
+            y_array.append( A_n[index+1] )
 
     logging.info( 'Lengh of X is %d' % ( len(X_array) ) )
 
@@ -320,10 +339,9 @@ def simplestModelExec():
             )
     logging.info('Model is: %s' % str( torchsummary.summary(model, (args.Lottery_max_number,)) ) )
 
+
     loss_function = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-
-    trained_model, max_trained_model = execute(model, loss_function, optimizer, train_loader, valid_loader)
 
     logging.info('Test w/ trained model')
     testModel(trained_model, A_n, B_n, N)
@@ -334,4 +352,8 @@ def simplestModelExec():
 # =================================================
 # Main
 if __name__ == "__main__":
+    initialize()
+
+    readCSV()
+
     simplestModelExec()
