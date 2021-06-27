@@ -137,7 +137,7 @@ def readCSV():
 
 # =================================================
 # Format data
-def formatData(X_array, y_array):
+def formatData(X_array, y_array, y_type='long'):
     # List --> numpy.array
     X_array = np.array(X_array)
     y_array = np.array(y_array)
@@ -149,8 +149,12 @@ def formatData(X_array, y_array):
     # numpy.array --> torch.tensor
     X_train_tensor = torch.tensor(X_train, dtype=torch.float)
     X_valid_tensor = torch.tensor(X_valid, dtype=torch.float)
-    y_train_tensor = torch.tensor(y_train, dtype=torch.float)
-    y_valid_tensor = torch.tensor(y_valid, dtype=torch.float)
+    if y_type == 'long':
+        y_train_tensor = torch.tensor(y_train, dtype=torch.long)
+        y_valid_tensor = torch.tensor(y_valid, dtype=torch.long)
+    elif y_type == 'float':
+        y_train_tensor = torch.tensor(y_train, dtype=torch.float)
+        y_valid_tensor = torch.tensor(y_valid, dtype=torch.float)
     logging.info('X_train size is: %s' % str( X_train_tensor.shape ) )
     logging.info('y_train size is: %s' % str( y_train_tensor.shape ) )
     logging.info('X_valid size is: %s' % str( X_valid_tensor.shape ) )
@@ -171,33 +175,40 @@ def formatData(X_array, y_array):
 # Train model function
 def trainModel(model, loss_function, optimizer, data_loader, is_validation=False, k=1):
     if is_validation:
+        # Be evaluation mode
         model.eval()
 
     loss_error = 0
     correct_count = 0
     count = len(data_loader.dataset)
     if args.debug:
-        print(count)
+        print('trained count = %d' % count)
 
     for X, y in data_loader:
         # Get predicted result
         predicted_numbers_binary = model(X)
-
         # Get top pick numbers
         _, predicted_numbers = torch.topk(predicted_numbers_binary.data, k)
 
-        _, y_topk = torch.topk(y, k)
+        # Check if target is not 1D
+        if k != 1:
+            _, y_topk = torch.topk(y, k)
+        else:
+            predicted_numbers = torch.max(predicted_numbers, 1)[0]
+            y_topk = y
 
         # Check if predicted contains its next numbers, and count
         corrects = torch.eq( predicted_numbers.sort()[0], y_topk.sort()[0] )
-        correct_count += corrects.sum().item()/args.pick
+        correct_count += corrects.sum().item()/k
 
         if args.debug:
-            print(X.shape)
-            print(y.shape)
-            print(predicted_numbers_binary.shape)
-            print(predicted_numbers.shape)
-            print(correct_count)
+            print('X shape = %s ' % str(X.shape) )
+            print('X[0] = %s ' % str(X[0]) )
+            print('predicted_numbers shape = %s ' % str(predicted_numbers.shape) )
+            print('predicted_numbers[0] = %s' % str(predicted_numbers[0]) )
+            print('y shape = %s ' % str(y.shape) )
+            print('y[0] = %s ' % str(y[0]) )
+            print('y_topk[0] = %s ' % str(y_topk[0]) )
 
         # Calculate loss error
         loss = loss_function(predicted_numbers_binary, y)
@@ -216,6 +227,7 @@ def trainModel(model, loss_function, optimizer, data_loader, is_validation=False
     accuracy = correct_count / count
 
     if is_validation:
+        # Back to train mode
         model.train()
     return mean_loss_error, accuracy
 
@@ -289,7 +301,7 @@ def simplestModelExec():
         y_array.append( B_n[index+1] )
     logging.info( 'Lengh of X is %d' % ( len(X_array) ) )
 
-    train_loader, valid_loader = formatData(X_array, y_array)
+    train_loader, valid_loader = formatData(X_array, y_array, 'float')
 
     model = torch.nn.Sequential(
             torch.nn.Linear(args.Lottery_max_number*2, args.Lottery_max_number),
@@ -315,38 +327,61 @@ def simplestModelExec():
         logging.info('n=%d, A`_{n+1}=%s. A_{n+1}=%s'
                 % (n+1, str(predicted_numbers.tolist()), str(answer_numbers.tolist()) ) )
 
-    #logging.info('Test w/ Max valid accuracy model')
 
 # Each pick model
-# X = [ A_n[0:5] ], y = A_{n+1}[0][ picks (n) ], [ picks (n+1) ]
+# X_0 = [ A_{n-p}[0], ..., A_n[0] ], y_0 = A_{n+1}[0]
+# ...
+# X_p = [ A_{n-p}[p-1], ..., A_n[p-1] ], y_p = A_{n+1}[p-1]
 def eachPickModelExec():
-    X_array = []
-    y_array = []
+    d_size = args.pick * 2
+    model = [ None for i in range(args.pick) ]
+    trained_model = [ None for i in range(args.pick) ]
+    for p in range(args.pick):
+        logging.info('Model#: %d' % p)
 
-    for index in range( int(N*args.perge_data_percentage), N-1 -1 ): # Do not use last data for training
-        for i in range(args.pick):
-            X_array.append( B_n[index] )
-            y_array.append( A_n[index+1] )
+        X_array = []
+        y_array = []
+        for index in range( int(N*args.perge_data_percentage), N-1 - d_size ): # Do not use last data for training
+            x_array = [ 0 for i in range(args.Lottery_max_number) ]
+            for i in range(d_size):
+                x_array[ A_n[index+i][p] ] += 1
+            # Normalize
+            x_array = [ i/max(x_array) for i in x_array ]
+            X_array.append( x_array )
+            y_array.append( A_n[index+d_size][p] )
 
-    logging.info( 'Lengh of X is %d' % ( len(X_array) ) )
+        logging.info( 'Length of X is %d' % ( len(X_array) ) )
 
-    train_loader, valid_loader = formatData(X_array, y_array)
+        train_loader, valid_loader = formatData(X_array, y_array)
 
-    model = torch.nn.Sequential(
-            torch.nn.Linear(args.Lottery_max_number, args.Lottery_max_number),
-            #torch.nn.ReLU(),
-            #torch.nn.Dropout(p=0.5),
-            )
-    logging.info('Model is: %s' % str( torchsummary.summary(model, (args.Lottery_max_number,)) ) )
+        model[p] = torch.nn.Sequential(
+                torch.nn.Linear(args.Lottery_max_number, args.Lottery_max_number),
+                #torch.nn.ReLU(),
+                #torch.nn.Dropout(p=0.5),
+                )
+        logging.info('Model is: %s' % str( torchsummary.summary(model[p], (args.Lottery_max_number,)) ) )
 
+        loss_function = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(model[p].parameters(), lr=0.1)
 
-    loss_function = torch.nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+        trained_model[p], max_trained_model = execute(model[p], loss_function, optimizer, train_loader, valid_loader)
 
     logging.info('Test w/ trained model')
-    testModel(trained_model, A_n, B_n, N)
-    logging.info('Test w/ Max valid accuracy model')
-    testModel(max_trained_model, A_n, B_n, N)
+    for n in range(N-6, N):
+        X = X_array[n-(N-6)-6]
+        ap_np1 = []
+        for p in range(args.pick):
+            predicted_number = testModel(trained_model[p], X)
+            ap_np1.append(predicted_number.item())
+
+        if n < N-1:
+            answer_numbers = np.array(A_n[n+1]) + 1
+        else:
+            answer_numbers = np.array([])
+        logging.info('n=%d, A`_{n+1}=%s. A_{n+1}=%s'
+                % (n+1, str(ap_np1), str(answer_numbers.tolist()) ) )
+
+
 
 
 # =================================================
@@ -357,3 +392,5 @@ if __name__ == "__main__":
     readCSV()
 
     simplestModelExec()
+
+    #eachPickModelExec()
