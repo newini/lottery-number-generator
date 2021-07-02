@@ -32,7 +32,7 @@ parser.add_argument('-d', '--debug', action='store_true', help='Debug mode (defa
 parser.add_argument('-l', '--log_file_name', type=str, default=datetime.date.today().strftime('%Y%m')+'.log',
         help='Log file name (default: %Y%m.log)')
 # Lottery game definition
-parser.add_argument('-L', '--Lottery_max_number', type=int, default=31,
+parser.add_argument('-L', '--lottery_max_number', type=int, default=31,
         help='Lottery game max numbers. (default: 31)')
 parser.add_argument('-p', '--pick', type=int, default=5,
         help='Number of pick in one game (default: 5)')
@@ -56,6 +56,7 @@ parser.add_argument('-e', '--epochs', type=int, default=50,
         help='How many times to train (default: 50)')
 # Others
 parser.add_argument('--random_seed', type=int, default=7, help='Random seed. Default: 7')
+parser.add_argument('--np_random_seed', type=int, default=7, help='Random seed. Default: 7')
 
 args = parser.parse_args()
 
@@ -107,12 +108,12 @@ def readCSV():
         for i in range(args.remove_lines):
             next(csvfile)
 
-        C_k = np.array( [0.0 for i in range(args.Lottery_max_number)] )
+        C_k = np.array( [0.0 for i in range(args.lottery_max_number)] )
 
         csvreader = csv.reader(csvfile, delimiter=',')
         for index, row in enumerate(csvreader):
             A_k = []
-            B_k = [ 0.0 for i in range(args.Lottery_max_number) ]
+            B_k = [ 0.0 for i in range(args.lottery_max_number) ]
             for num in row[args.appearance_first_number_order:args.appearance_first_number_order+args.pick]:
                 A_k.append(int(num)-1)      # Becareful!
                 B_k[int(num)-1] = 1         # minus 1 to adapt to array index
@@ -122,7 +123,7 @@ def readCSV():
             B_n.append(B_k)
             C_n.append(copy.copy(C_k)) # np.array
             R_k = C_k/( args.pick*(index+1) )
-            P_np1.append( (1 - R_k)/(args.Lottery_max_number-1) )
+            P_np1.append( (1 - R_k)/(args.lottery_max_number-1) )
 
     global N
     N = len(A_n)
@@ -241,6 +242,7 @@ def initialize():
 
     # Fix random seed
     random.seed(args.random_seed)
+    np.random.seed(args.np_random_seed)
 
     torch.manual_seed(0)
 
@@ -304,11 +306,11 @@ def simplestModelExec():
     train_loader, valid_loader = formatData(X_array, y_array, 'float')
 
     model = torch.nn.Sequential(
-            torch.nn.Linear(args.Lottery_max_number*2, args.Lottery_max_number),
+            torch.nn.Linear(args.lottery_max_number*2, args.lottery_max_number),
             #torch.nn.ReLU(),
             #torch.nn.Dropout(p=0.5),
             )
-    logging.info('Model is: %s' % str( torchsummary.summary(model, (args.Lottery_max_number*2,)) ) )
+    logging.info('Model is: %s' % str( torchsummary.summary(model, (args.lottery_max_number*2,)) ) )
 
     loss_function = torch.nn.BCEWithLogitsLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
@@ -343,7 +345,7 @@ def eachPickModelExec():
         X_array = []
         y_array = []
         for index in range( int(N*args.perge_data_percentage), N-1 - d_size ): # Do not use last data for training
-            x_array = [ 0 for i in range(args.Lottery_max_number) ]
+            x_array = [ 0 for i in range(args.lottery_max_number) ]
             for i in range(d_size):
                 x_array[ A_n[index+i][p] ] += 1
             # Normalize
@@ -356,11 +358,11 @@ def eachPickModelExec():
         train_loader, valid_loader = formatData(X_array, y_array)
 
         model[p] = torch.nn.Sequential(
-                torch.nn.Linear(args.Lottery_max_number, args.Lottery_max_number),
+                torch.nn.Linear(args.lottery_max_number, args.lottery_max_number),
                 #torch.nn.ReLU(),
                 #torch.nn.Dropout(p=0.5),
                 )
-        logging.info('Model is: %s' % str( torchsummary.summary(model[p], (args.Lottery_max_number,)) ) )
+        logging.info('Model is: %s' % str( torchsummary.summary(model[p], (args.lottery_max_number,)) ) )
 
         loss_function = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.SGD(model[p].parameters(), lr=0.1)
@@ -386,8 +388,7 @@ def eachPickModelExec():
 
 def probabilityExec():
     for n in range(N-6, N):
-        #ap_np1 = random.choices([i for i in range(args.Lottery_max_number)], weights=P_np1[n], k=5)
-        ap_np1 = np.random.choice([i for i in range(args.Lottery_max_number)], args.pick, p=P_np1[n], replace=False)
+        ap_np1 = np.random.choice([i for i in range(args.lottery_max_number)], args.pick, p=P_np1[n], replace=False)
         ap_np1 = ap_np1 + 1
         if n < N-1:
             answer_numbers = np.array(A_n[n+1]) + 1
