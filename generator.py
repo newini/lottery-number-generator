@@ -320,6 +320,7 @@ def simplestModelExec():
     for n in range(N-6, N):
         X = B_n[n] + P_np1[n].tolist()
         predicted_numbers = testModel(trained_model, X, k=args.pick)
+        predicted_numbers = predicted_numbers + 1
         if n < N-1:
             answer_numbers = np.array(A_n[n+1]) + 1
         else:
@@ -366,13 +367,14 @@ def eachPickModelExec():
 
         trained_model[p], max_trained_model = execute(model[p], loss_function, optimizer, train_loader, valid_loader)
 
+    # Predict
     logging.info('Test w/ trained model')
     for n in range(N-6, N):
         X = X_array[n-(N-6)-6]
         ap_np1 = []
         for p in range(args.pick):
             predicted_number = testModel(trained_model[p], X)
-            ap_np1.append(predicted_number.item())
+            ap_np1.append(predicted_number.item()+1)
 
         if n < N-1:
             answer_numbers = np.array(A_n[n+1]) + 1
@@ -382,6 +384,17 @@ def eachPickModelExec():
                 % (n+1, str(ap_np1), str(answer_numbers.tolist()) ) )
 
 
+def probabilityExec():
+    for n in range(N-6, N):
+        #ap_np1 = random.choices([i for i in range(args.Lottery_max_number)], weights=P_np1[n], k=5)
+        ap_np1 = np.random.choice([i for i in range(args.Lottery_max_number)], args.pick, p=P_np1[n], replace=False)
+        ap_np1 = ap_np1 + 1
+        if n < N-1:
+            answer_numbers = np.array(A_n[n+1]) + 1
+        else:
+            answer_numbers = np.array([])
+        logging.info('n=%d, A`_{n+1}=%s. A_{n+1}=%s'
+                % (n+1, str(ap_np1), str(answer_numbers.tolist()) ) )
 
 
 # =================================================
@@ -391,6 +404,8 @@ if __name__ == "__main__":
 
     readCSV()
 
-    simplestModelExec()
+    #simplestModelExec()
 
     #eachPickModelExec()
+
+    probabilityExec()
