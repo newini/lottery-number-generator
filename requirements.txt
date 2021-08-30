@@ -1,4 +1,5 @@
 coloredlogs
 jupyterlab
+jupyterlab-kite
 numpy
 scikit-learn
