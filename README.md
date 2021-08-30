@@ -1,5 +1,15 @@
 # Lottery expected next number generator
-## Instroduction
+
+
+## 1. Instroduction
+
+
+
+## 2. Preparation
+- Install python packages
+```
+pip install -r requirements.txt
+```
 
 
 

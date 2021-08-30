@@ -1,0 +1,4 @@
+coloredlogs
+jupyterlab
+numpy
+scikit-learn
