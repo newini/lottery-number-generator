@@ -43,6 +43,10 @@ pip install jupyterlab-kite
 ```
 jupyter server extension enable --user --py jupyter_kite
 ```
+- Check
+```
+jupyter server extension list
+```
 
 
 ### 2. [jupyterlab-lsp](https://github.com/krassowski/jupyterlab-lsp)
