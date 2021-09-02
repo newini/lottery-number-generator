@@ -1,34 +1,34 @@
 # Lottery expected next number generator
-
-
-## 1. Instroduction
+Just for Fun
 
 
 
-## 2. Preparation
+## 1. Preparation
 - Install python packages
 ```
 pip install -r requirements.txt
 ```
 
 
-
-## How it works
-
-- Read number data from csv file
-
-- Calculate Probability on n+1
-
-Detail is [here](https://newini.github.io/lottery-number-generator/docs/detail.html)
+## 2. Usage
+### 2.1 Open Jupyter Lab
+```
+jupyter lab --no-browser
+```
 
 
+### 2.2 Select book file
+Jupyter book files is in `books`
 
-## JupyterLab extensions
+
+
+
+## 3. JupyterLab extensions
 **CAUTION**
 Do not install `jupyterlab-kite` and `jupyterlab-lsp` both!
 
 
-### 1. [jupyterlab-kite](https://github.com/kiteco/jupyterlab-kite)
+### 3.1 [jupyterlab-kite](https://github.com/kiteco/jupyterlab-kite)
 to use full-auto completion
 
 - Install `Kite` on user directory `~/.local/share`
@@ -49,7 +49,7 @@ jupyter server extension list
 ```
 
 
-### 2. [jupyterlab-lsp](https://github.com/krassowski/jupyterlab-lsp)
+### 3.2 [jupyterlab-lsp](https://github.com/krassowski/jupyterlab-lsp)
 to use semi-auto completion
 - Install
 ```
@@ -68,3 +68,13 @@ jupyter server extension enable --user --py jupyter_lsp
 ```
 jupyter server extension list
 ```
+
+
+
+## 4. How it works
+
+- Read number data from csv file
+
+- Calculate Probability on n+1
+
+Detail is [here](https://newini.github.io/lottery-number-generator/docs/detail.html)
