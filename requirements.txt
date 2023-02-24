@@ -1,7 +1,0 @@
-coloredlogs
-jupyterlab
-jupyterlab-kite
-matplotlib
-numpy
-pandas
-scikit-learn
