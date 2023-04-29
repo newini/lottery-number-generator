@@ -10,6 +10,12 @@ pip install -r requirements.txt
 ```
 
 
+```
+ poetry add tensorflow numpy==1.23.x pandas jupyterlab jupyterlab-kite scikit-learn statsmodels  matplotlib plotly joblib
+```
+
+
+
 ## 2. Usage
 ### 2.1 Open Jupyter Lab
 ```
